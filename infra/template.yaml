@@ -1,0 +1,196 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: UbatJelas Smart Prescription Medication Guide
+
+# ──────────────────────────────────────────────────────────────────────────────
+# IAM Role
+# ──────────────────────────────────────────────────────────────────────────────
+Resources:
+
+  AppBedrockRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: UbatJelasBedrockRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockInvokePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  # Global cross-region inference profile (routes to all commercial regions)
+                  - !Sub "arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0"
+                  # Foundation model ARN (wildcard region for cross-region routing)
+                  - "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+        - PolicyName: DynamoDBSessionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource: !GetAtt ChatSessionsTable.Arn
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # Lambda — Medication Instructions (streaming via Lambda Web Adapter)
+  # ──────────────────────────────────────────────────────────────────────────────
+  MedicationInstructionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ubatjelas-medication-instructions
+      CodeUri: ../functions/medication_instructions/
+      Handler: run.sh
+      Runtime: python3.12
+      Role: !GetAtt AppBedrockRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Layers:
+        - !Sub "arn:aws:lambda:${AWS::Region}:753240598075:layer:LambdaAdapterLayerX86:27"
+      Environment:
+        Variables:
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
+          AWS_LWA_INVOKE_MODE: response_stream
+          PORT: "8080"
+          DYNAMODB_TABLE: !Ref ChatSessionsTable
+      # NOTE: No Cors block here — causes AWS::EarlyValidation failure.
+      # CORS is handled by Flask response headers in app.py.
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: RESPONSE_STREAM
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # DynamoDB — Chat session history (keyed by session_id, 24-hour TTL)
+  # ──────────────────────────────────────────────────────────────────────────────
+  ChatSessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: my-app-chat-sessions
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: session_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: session_id
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # S3 — Frontend Bucket (private; served exclusively via CloudFront OAC)
+  # ──────────────────────────────────────────────────────────────────────────────
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "ubatjelas-frontend-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipal
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "${FrontendBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}"
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # CloudFront — Origin Access Control
+  # ──────────────────────────────────────────────────────────────────────────────
+  CloudFrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: UbatJelasOAC
+        Description: OAC for UbatJelas S3 frontend bucket
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # CloudFront — Distribution
+  # ──────────────────────────────────────────────────────────────────────────────
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: UbatJelas Smart Prescription Medication Guide
+        Enabled: true
+        DefaultRootObject: index.html
+        PriceClass: PriceClass_200
+        HttpVersion: http2
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt CloudFrontOAC.Id
+            S3OriginConfig:
+              # Must be empty string when using OAC (not OAI)
+              OriginAccessIdentity: ""
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized (managed)
+        CustomErrorResponses:
+          # Return index.html for 403/404 so SPA routing works
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Outputs
+# ──────────────────────────────────────────────────────────────────────────────
+Outputs:
+  WebsiteUrl:
+    Description: CloudFront HTTPS URL for the UbatJelas frontend
+    Value: !Sub "https://${CloudFrontDistribution.DomainName}"
+
+  BucketName:
+    Description: S3 bucket name for the frontend assets
+    Value: !Ref FrontendBucket
+
+  MedicationInstructionsFunctionUrl:
+    Description: Lambda Function URL for the streaming medication instructions endpoint
+    Value: !GetAtt MedicationInstructionsFunctionUrl.FunctionUrl
+
+  ChatSessionsTableName:
+    Description: DynamoDB table for conversation session history
+    Value: !Ref ChatSessionsTable

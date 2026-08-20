@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UbatJelas — Smart Prescription Medication Guide</title>
+  <style>
+    /* ── CSS Variables ────────────────────────────────────────────────────── */
+    :root {
+      --primary:        #2563eb;
+      --primary-hover:  #1d4ed8;
+      --primary-light:  #eff6ff;
+      --accent:         #0ea5e9;
+      --success:        #16a34a;
+      --warning:        #d97706;
+      --danger:         #dc2626;
+      --bg:             #f8fafc;
+      --surface:        #ffffff;
+      --surface-2:      #f1f5f9;
+      --border:         #e2e8f0;
+      --border-focus:   #93c5fd;
+      --text:           #0f172a;
+      --text-muted:     #64748b;
+      --text-light:     #94a3b8;
+      --radius:         12px;
+      --radius-sm:      8px;
+      --shadow:         0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+      --shadow-lg:      0 4px 6px rgba(0,0,0,.07), 0 10px 40px rgba(0,0,0,.10);
+      --transition:     all .18s ease;
+    }
+
+    /* ── Reset & Base ─────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                   "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Layout ───────────────────────────────────────────────────────────── */
+    .page-wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 24px 16px 60px;
+    }
+
+    /* ── Card ─────────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 28px 24px;
+      margin-bottom: 20px;
+    }
+
+    /* ── Welcome Banner ───────────────────────────────────────────────────── */
+    .banner {
+      background: linear-gradient(135deg, #1e40af 0%, #0369a1 100%);
+      color: #fff;
+      border: none;
+      padding: 32px 28px;
+    }
+    .banner-inner {
+      display: flex;
+      align-items: flex-start;
+      gap: 18px;
+    }
+    .banner-icon {
+      font-size: 2.8rem;
+      line-height: 1;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .banner h1 {
+      font-size: 1.55rem;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      margin-bottom: 6px;
+      color: #fff;
+    }
+    .banner p {
+      font-size: .95rem;
+      color: rgba(255,255,255,.88);
+      max-width: 540px;
+    }
+    .banner-badge {
+      display: inline-block;
+      margin-top: 12px;
+      background: rgba(255,255,255,.18);
+      border: 1px solid rgba(255,255,255,.3);
+      border-radius: 999px;
+      padding: 3px 12px;
+      font-size: .78rem;
+      font-weight: 600;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+    }
+
+    /* ── Section label ────────────────────────────────────────────────────── */
+    .section-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .8rem;
+      font-weight: 700;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+    .section-label .icon { font-size: 1rem; }
+
+    /* ── File Upload Zone ─────────────────────────────────────────────────── */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-sm);
+      padding: 32px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: var(--transition);
+      background: var(--surface-2);
+      position: relative;
+    }
+    .upload-zone:hover,
+    .upload-zone.drag-over {
+      border-color: var(--primary);
+      background: var(--primary-light);
+    }
+    .upload-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+    .upload-icon { font-size: 2.2rem; margin-bottom: 8px; }
+    .upload-title {
+      font-size: .95rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .upload-hint {
+      font-size: .82rem;
+      color: var(--text-muted);
+    }
+    .upload-hint span {
+      color: var(--primary);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .upload-accepted {
+      margin-top: 8px;
+      font-size: .75rem;
+      color: var(--text-light);
+    }
+
+    /* File preview */
+    .file-preview {
+      display: none;
+      align-items: center;
+      gap: 14px;
+      margin-top: 16px;
+      padding: 12px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      text-align: left;
+    }
+    .file-preview.visible { display: flex; }
+    .preview-thumb {
+      width: 52px;
+      height: 52px;
+      border-radius: 6px;
+      object-fit: cover;
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+      background: var(--surface-2);
+    }
+    .preview-thumb.doc-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+    }
+    .preview-info { flex: 1; min-width: 0; }
+    .preview-name {
+      font-size: .88rem;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .preview-size {
+      font-size: .78rem;
+      color: var(--text-muted);
+    }
+    .preview-remove {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      padding: 4px;
+      border-radius: 4px;
+      transition: var(--transition);
+      flex-shrink: 0;
+    }
+    .preview-remove:hover { color: var(--danger); background: #fee2e2; }
+
+    /* ── Textarea ─────────────────────────────────────────────────────────── */
+    .input-optional-label {
+      font-size: .78rem;
+      color: var(--text-light);
+      font-weight: 500;
+      margin-left: auto;
+    }
+    .section-label-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .section-label-row .section-label { margin-bottom: 0; flex: 1; }
+
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: .93rem;
+      color: var(--text);
+      background: var(--surface-2);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      resize: vertical;
+      transition: var(--transition);
+      line-height: 1.55;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: var(--border-focus);
+      background: var(--surface);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+    }
+    textarea::placeholder { color: var(--text-light); }
+
+    /* ── Run All Button ───────────────────────────────────────────────────── */
+    .btn-run {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 15px 24px;
+      background: var(--primary);
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: .01em;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: var(--transition);
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(37,99,235,.3);
+    }
+    .btn-run:hover:not(:disabled) {
+      background: var(--primary-hover);
+      box-shadow: 0 4px 16px rgba(37,99,235,.4);
+      transform: translateY(-1px);
+    }
+    .btn-run:active:not(:disabled) { transform: translateY(0); }
+    .btn-run:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    .btn-icon { font-size: 1.15rem; }
+
+    /* ── Validation error ─────────────────────────────────────────────────── */
+    .validation-error {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: var(--radius-sm);
+      color: var(--danger);
+      font-size: .88rem;
+      font-weight: 500;
+      margin-bottom: 16px;
+    }
+    .validation-error.visible { display: flex; }
+
+    /* ── Output Panel ─────────────────────────────────────────────────────── */
+    .output-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .output-header .section-label { margin-bottom: 0; }
+    .powered-by {
+      font-size: .74rem;
+      color: var(--text-light);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .output-panel {
+      height: 340px;
+      overflow-y: scroll;
+      background: var(--surface-2);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 18px 18px 18px 20px;
+      position: relative;
+
+      /* Custom thin scrollbar */
+      scrollbar-width: thin;
+      scrollbar-color: #cbd5e1 transparent;
+    }
+    .output-panel::-webkit-scrollbar { width: 5px; }
+    .output-panel::-webkit-scrollbar-track { background: transparent; }
+    .output-panel::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 99px;
+    }
+    .output-panel::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* Empty state */
+    .output-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-light);
+      text-align: center;
+      gap: 8px;
+    }
+    .output-empty-icon { font-size: 2.4rem; opacity: .5; }
+    .output-empty-text { font-size: .9rem; }
+
+    /* Spinner */
+    .spinner-wrap {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 14px;
+    }
+    .spinner-wrap.visible { display: flex; }
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner-text { font-size: .88rem; color: var(--text-muted); }
+
+    /* Error state */
+    .output-error {
+      display: none;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 14px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: var(--radius-sm);
+      color: var(--danger);
+      font-size: .88rem;
+    }
+    .output-error.visible { display: flex; }
+    .output-error-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+
+    /* Streaming content */
+    .output-content { display: none; }
+    .output-content.visible { display: block; }
+
+    /* ── Markdown line rendering ──────────────────────────────────────────── */
+    .md-line {
+      display: block;
+      animation: fadeSlideIn .15s ease forwards;
+      opacity: 0;
+    }
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(2px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .md-line.active-line::after {
+      content: "▋";
+      display: inline-block;
+      color: var(--primary);
+      animation: blink .8s step-end infinite;
+      margin-left: 1px;
+      font-size: .9em;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* Markdown element styles inside output */
+    .output-content h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text);
+      margin: 18px 0 6px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid var(--primary-light);
+    }
+    .output-content h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #1e40af;
+      margin: 16px 0 5px;
+    }
+    .output-content h3 {
+      font-size: .97rem;
+      font-weight: 700;
+      color: var(--text);
+      margin: 12px 0 4px;
+    }
+    .output-content p { margin: 4px 0; font-size: .93rem; }
+    .output-content ul,
+    .output-content ol {
+      margin: 4px 0 4px 22px;
+      font-size: .93rem;
+    }
+    .output-content li { margin: 2px 0; }
+    .output-content hr {
+      border: none;
+      border-top: 1.5px solid var(--border);
+      margin: 14px 0;
+    }
+    .output-content blockquote {
+      border-left: 3px solid var(--warning);
+      padding: 8px 14px;
+      margin: 10px 0;
+      background: #fffbeb;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      font-size: .9rem;
+      color: #92400e;
+    }
+    .output-content code {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      background: #f1f5f9;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: .85em;
+      color: #0f172a;
+    }
+    .output-content strong { font-weight: 700; color: var(--text); }
+    .output-content em { font-style: italic; }
+
+    /* ── Disclaimer footer ────────────────────────────────────────────────── */
+    .disclaimer {
+      margin-top: 20px;
+      padding: 14px 18px;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: var(--radius-sm);
+      font-size: .82rem;
+      color: #78350f;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .disclaimer-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+
+    /* ── Responsive ───────────────────────────────────────────────────────── */
+    @media (max-width: 480px) {
+      .card { padding: 20px 16px; }
+      .banner { padding: 24px 18px; }
+      .banner-inner { flex-direction: column; gap: 10px; }
+      .banner h1 { font-size: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- ── Widget 1: Welcome Banner ────────────────────────────────────────── -->
+  <div class="card banner">
+    <div class="banner-inner">
+      <div class="banner-icon">💊</div>
+      <div>
+        <h1>UbatJelas</h1>
+        <p>
+          UbatJelas helps you understand your doctor's prescription in simple,
+          clear language. Upload a photo of your prescription or type it in
+          manually, and we'll break down exactly how to take your medication —
+          including dosage, timing, frequency, and important warnings.
+        </p>
+        <span class="banner-badge">Smart Prescription Medication Guide</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Widget 2: Prescription Photo ────────────────────────────────────── -->
+  <div class="card">
+    <div class="section-label">
+      <span class="icon">📷</span>
+      Prescription Photo
+    </div>
+
+    <div
+      class="upload-zone"
+      id="uploadZone"
+      role="button"
+      aria-label="Upload prescription photo"
+      tabindex="0"
+    >
+      <input
+        type="file"
+        id="fileInput"
+        accept="image/jpeg,image/png,image/webp,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        aria-label="Select prescription file"
+      />
+      <div class="upload-icon">🖼️</div>
+      <div class="upload-title">Drag &amp; drop your prescription here</div>
+      <div class="upload-hint">or <span>click to browse</span></div>
+      <div class="upload-accepted">Accepted: JPG, PNG, WEBP, DOCX</div>
+    </div>
+
+    <div class="file-preview" id="filePreview">
+      <div id="previewThumb" class="preview-thumb doc-icon"></div>
+      <div class="preview-info">
+        <div class="preview-name" id="previewName"></div>
+        <div class="preview-size" id="previewSize"></div>
+      </div>
+      <button class="preview-remove" id="removeFile" aria-label="Remove file" title="Remove file">✕</button>
+    </div>
+  </div>
+
+  <!-- ── Widget 3: Prescription Text ─────────────────────────────────────── -->
+  <div class="card">
+    <div class="section-label-row">
+      <div class="section-label">
+        <span class="icon">✏️</span>
+        Prescription Text
+      </div>
+      <span class="input-optional-label">Optional</span>
+    </div>
+    <textarea
+      id="prescriptionText"
+      placeholder="Type or paste your prescription details here… e.g. Amoxicillin 500mg, 3 times daily for 7 days"
+      aria-label="Prescription text input"
+    ></textarea>
+  </div>
+
+  <!-- ── Validation error ─────────────────────────────────────────────────── -->
+  <div class="validation-error" id="validationError" role="alert">
+    <span>⚠️</span>
+    <span id="validationMsg">Please upload a prescription photo or enter prescription text before running.</span>
+  </div>
+
+  <!-- ── Run All button ───────────────────────────────────────────────────── -->
+  <button class="btn-run" id="btnRun" onclick="runAll()">
+    <span class="btn-icon">▶</span>
+    Analyse Prescription
+  </button>
+
+  <!-- ── Output: Medication Instructions ─────────────────────────────────── -->
+  <div class="card">
+    <div class="output-header">
+      <div class="section-label">
+        <span class="icon">📋</span>
+        Medication Instructions
+      </div>
+      <div class="powered-by">⚡ Claude Haiku 4.5</div>
+    </div>
+
+    <div class="output-panel" id="outputPanel" role="region" aria-live="polite" aria-label="Medication instructions output">
+
+      <!-- Empty state -->
+      <div class="output-empty" id="outputEmpty">
+        <div class="output-empty-icon">💊</div>
+        <div class="output-empty-text">
+          Your medication guide will appear here.<br>
+          Upload a photo or enter your prescription, then click Analyse.
+        </div>
+      </div>
+
+      <!-- Loading spinner -->
+      <div class="spinner-wrap" id="spinnerWrap">
+        <div class="spinner"></div>
+        <div class="spinner-text">Analysing your prescription…</div>
+      </div>
+
+      <!-- Error state -->
+      <div class="output-error" id="outputError" role="alert">
+        <span class="output-error-icon">❌</span>
+        <span id="outputErrorMsg">An error occurred. Please try again.</span>
+      </div>
+
+      <!-- Streaming markdown content -->
+      <div class="output-content" id="outputContent"></div>
+
+    </div><!-- /.output-panel -->
+  </div>
+
+  <!-- ── Disclaimer ───────────────────────────────────────────────────────── -->
+  <div class="disclaimer">
+    <span class="disclaimer-icon">⚠️</span>
+    <div>
+      <strong>Important:</strong> UbatJelas is for informational purposes only.
+      Always consult your doctor or pharmacist before taking any medication.
+      Maklumat ini adalah untuk rujukan sahaja. Sila rujuk doktor atau ahli farmasi anda.
+    </div>
+  </div>
+
+</div><!-- /.page-wrap -->
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  let fileData = null;   // raw base64 string (no data: prefix)
+  let fileMime = null;   // MIME type string
+  let isStreaming = false;
+
+  // ── DOM refs ───────────────────────────────────────────────────────────────
+  const uploadZone     = document.getElementById("uploadZone");
+  const fileInput      = document.getElementById("fileInput");
+  const filePreview    = document.getElementById("filePreview");
+  const previewThumb   = document.getElementById("previewThumb");
+  const previewName    = document.getElementById("previewName");
+  const previewSize    = document.getElementById("previewSize");
+  const removeFileBtn  = document.getElementById("removeFile");
+  const prescriptionText = document.getElementById("prescriptionText");
+  const btnRun         = document.getElementById("btnRun");
+  const validationError = document.getElementById("validationError");
+  const outputEmpty    = document.getElementById("outputEmpty");
+  const spinnerWrap    = document.getElementById("spinnerWrap");
+  const outputError    = document.getElementById("outputError");
+  const outputErrorMsg = document.getElementById("outputErrorMsg");
+  const outputContent  = document.getElementById("outputContent");
+  const outputPanel    = document.getElementById("outputPanel");
+
+  // ── Endpoint (injected by GitHub Actions sed) ──────────────────────────────
+  const MEDICATION_URL = "__MEDICATION_INSTRUCTIONS_URL__";
+
+  // ── File handling ──────────────────────────────────────────────────────────
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  function processFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const dataUrl = e.target.result;
+      // Strip "data:<mime>;base64," prefix
+      const commaIdx = dataUrl.indexOf(",");
+      fileData = dataUrl.substring(commaIdx + 1);
+      fileMime = file.type || "application/octet-stream";
+
+      // Show preview
+      previewName.textContent = file.name;
+      previewSize.textContent = formatBytes(file.size);
+
+      if (fileMime.startsWith("image/")) {
+        // Show image thumbnail
+        const img = document.createElement("img");
+        img.src = dataUrl;
+        img.className = "preview-thumb";
+        img.alt = "Prescription preview";
+        previewThumb.replaceWith(img);
+        // Keep reference updated
+        // (we reassign below)
+      } else {
+        // Doc icon
+        previewThumb.textContent = "📄";
+        previewThumb.className = "preview-thumb doc-icon";
+      }
+      filePreview.classList.add("visible");
+      hideValidation();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // File input change
+  fileInput.addEventListener("change", function() {
+    if (this.files && this.files[0]) processFile(this.files[0]);
+  });
+
+  // Remove file
+  removeFileBtn.addEventListener("click", function(e) {
+    e.stopPropagation();
+    fileData = null;
+    fileMime = null;
+    fileInput.value = "";
+    filePreview.classList.remove("visible");
+    // Reset thumb element back to div
+    const existingThumb = filePreview.querySelector(".preview-thumb");
+    if (existingThumb.tagName === "IMG") {
+      const div = document.createElement("div");
+      div.id = "previewThumb";
+      div.className = "preview-thumb doc-icon";
+      existingThumb.replaceWith(div);
+    }
+  });
+
+  // Drag and drop
+  uploadZone.addEventListener("dragover", function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    uploadZone.classList.add("drag-over");
+  });
+  uploadZone.addEventListener("dragleave", function(e) {
+    e.preventDefault();
+    uploadZone.classList.remove("drag-over");
+  });
+  uploadZone.addEventListener("drop", function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    uploadZone.classList.remove("drag-over");
+    const dt = e.dataTransfer;
+    if (dt && dt.files && dt.files[0]) processFile(dt.files[0]);
+  });
+
+  // Keyboard accessibility on upload zone
+  uploadZone.addEventListener("keydown", function(e) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      fileInput.click();
+    }
+  });
+
+  // ── Validation ─────────────────────────────────────────────────────────────
+  function showValidation(msg) {
+    document.getElementById("validationMsg").textContent = msg;
+    validationError.classList.add("visible");
+  }
+  function hideValidation() {
+    validationError.classList.remove("visible");
+  }
+
+  // ── Output state helpers ────────────────────────────────────────────────────
+  function showEmpty() {
+    outputEmpty.style.display = "flex";
+    spinnerWrap.classList.remove("visible");
+    outputError.classList.remove("visible");
+    outputContent.classList.remove("visible");
+  }
+  function showSpinner() {
+    outputEmpty.style.display = "none";
+    spinnerWrap.classList.add("visible");
+    outputError.classList.remove("visible");
+    outputContent.classList.remove("visible");
+  }
+  function showError(msg) {
+    outputEmpty.style.display = "none";
+    spinnerWrap.classList.remove("visible");
+    outputErrorMsg.textContent = msg;
+    outputError.classList.add("visible");
+    outputContent.classList.remove("visible");
+  }
+  function showContent() {
+    outputEmpty.style.display = "none";
+    spinnerWrap.classList.remove("visible");
+    outputError.classList.remove("visible");
+    outputContent.classList.add("visible");
+  }
+
+  // ── Markdown line renderer ──────────────────────────────────────────────────
+  // Pure JS — no external libraries.
+  function renderMarkdownLine(raw) {
+    const line = raw;
+
+    // Blockquote: "> text"
+    if (/^>\s/.test(line)) {
+      const inner = applyInline(line.replace(/^>\s*/, ""));
+      const bq = document.createElement("blockquote");
+      bq.innerHTML = inner;
+      return bq;
+    }
+    // HR: ---
+    if (/^---+$/.test(line.trim())) {
+      return document.createElement("hr");
+    }
+    // H1: # text
+    if (/^#\s+/.test(line)) {
+      const el = document.createElement("h1");
+      el.innerHTML = applyInline(line.replace(/^#+\s+/, ""));
+      return el;
+    }
+    // H2: ## text
+    if (/^##\s+/.test(line)) {
+      const el = document.createElement("h2");
+      el.innerHTML = applyInline(line.replace(/^#+\s+/, ""));
+      return el;
+    }
+    // H3: ### text
+    if (/^###\s+/.test(line)) {
+      const el = document.createElement("h3");
+      el.innerHTML = applyInline(line.replace(/^#+\s+/, ""));
+      return el;
+    }
+    // Unordered list: "- " or "* "
+    if (/^[-*]\s+/.test(line)) {
+      const li = document.createElement("li");
+      li.innerHTML = applyInline(line.replace(/^[-*]\s+/, ""));
+      const ul = document.createElement("ul");
+      ul.appendChild(li);
+      return ul;
+    }
+    // Ordered list: "1. "
+    if (/^\d+\.\s+/.test(line)) {
+      const li = document.createElement("li");
+      li.innerHTML = applyInline(line.replace(/^\d+\.\s+/, ""));
+      const ol = document.createElement("ol");
+      ol.appendChild(li);
+      return ol;
+    }
+    // Empty line → spacer
+    if (line.trim() === "") {
+      const spacer = document.createElement("span");
+      spacer.style.display = "block";
+      spacer.style.height = "6px";
+      return spacer;
+    }
+    // Default: paragraph
+    const p = document.createElement("p");
+    p.innerHTML = applyInline(line);
+    return p;
+  }
+
+  function applyInline(text) {
+    // Escape HTML first
+    let s = text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    // `code`
+    s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+    // **bold**
+    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    // *italic*
+    s = s.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+    // __bold__
+    s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
+    // _italic_
+    s = s.replace(/_([^_]+)_/g, "<em>$1</em>");
+    return s;
+  }
+
+  // ── Streaming fetch ─────────────────────────────────────────────────────────
+  async function runAll() {
+    if (isStreaming) return;
+
+    hideValidation();
+
+    const text = prescriptionText.value.trim();
+
+    // Validate — need at least one input
+    if (!fileData && !text) {
+      showValidation("Please upload a prescription photo or enter prescription text before analysing.");
+      return;
+    }
+
+    // UI → loading state
+    isStreaming = true;
+    btnRun.disabled = true;
+    outputContent.innerHTML = "";
+    showSpinner();
+
+    // Build payload
+    const payload = {};
+    if (text) payload.prescription_text = text;
+    if (fileData && fileMime) {
+      payload.file_data = fileData;
+      payload.file_mime = fileMime;
+    }
+
+    // Line buffer for incomplete lines
+    let lineBuffer = "";
+    let activeSpan = null;   // the current .md-line span with cursor
+    let firstChunk = true;
+
+    function flushLine(lineText) {
+      // Remove active cursor from previous span
+      if (activeSpan) {
+        activeSpan.classList.remove("active-line");
+        activeSpan = null;
+      }
+
+      if (lineText === "") {
+        // Empty line → spacer
+        const spacer = document.createElement("span");
+        spacer.className = "md-line";
+        spacer.style.display = "block";
+        spacer.style.height = "6px";
+        outputContent.appendChild(spacer);
+        return;
+      }
+
+      const mdEl = renderMarkdownLine(lineText);
+      const wrapper = document.createElement("span");
+      wrapper.className = "md-line active-line";
+      wrapper.appendChild(mdEl);
+      outputContent.appendChild(wrapper);
+      activeSpan = wrapper;
+
+      // Auto-scroll to bottom
+      outputPanel.scrollTop = outputPanel.scrollHeight;
+    }
+
+    try {
+      const response = await fetch(MEDICATION_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        let errMsg = `Server error ${response.status}`;
+        try {
+          const errBody = await response.json();
+          if (errBody.error) errMsg = errBody.error;
+        } catch {}
+        throw new Error(errMsg);
+      }
+
+      // Switch to content view on first successful byte
+      showContent();
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+
+        if (firstChunk) {
+          firstChunk = false;
+        }
+
+        // Split on newlines, buffer incomplete lines
+        const parts = (lineBuffer + chunk).split("\n");
+        lineBuffer = parts.pop(); // last element may be incomplete
+
+        for (const part of parts) {
+          flushLine(part);
+        }
+      }
+
+      // Flush any remaining buffer
+      if (lineBuffer) {
+        flushLine(lineBuffer);
+        lineBuffer = "";
+      }
+
+      // Remove final cursor
+      if (activeSpan) {
+        activeSpan.classList.remove("active-line");
+        activeSpan = null;
+      }
+
+      // Scroll to bottom
+      outputPanel.scrollTop = outputPanel.scrollHeight;
+
+    } catch (err) {
+      console.error("Streaming error:", err);
+      showError(err.message || "An unexpected error occurred. Please try again.");
+    } finally {
+      isStreaming = false;
+      btnRun.disabled = false;
+    }
+  }
+</script>
+</body>
+</html>

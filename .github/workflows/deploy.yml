@@ -1,0 +1,118 @@
+name: Deploy UbatJelas
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build & Deploy to AWS
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. AWS credentials ───────────────────────────────────────────────────
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ap-southeast-1
+
+      # ── 3. Python ────────────────────────────────────────────────────────────
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # ── 4. SAM CLI ───────────────────────────────────────────────────────────
+      - name: Set up AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      # ── 5. SAM build ─────────────────────────────────────────────────────────
+      - name: SAM build
+        run: sam build --template infra/template.yaml
+
+      # ── 6. SAM deploy ────────────────────────────────────────────────────────
+      - name: SAM deploy
+        run: |
+          sam deploy \
+            --stack-name ubatjelas-smart-prescription-medication-guide \
+            --s3-bucket ${{ secrets.SAM_DEPLOY_BUCKET }} \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --region ap-southeast-1 \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset
+
+      # ── 7. Read CloudFormation outputs ───────────────────────────────────────
+      - name: Read stack outputs
+        id: cf
+        run: |
+          get_output() {
+            aws cloudformation describe-stacks \
+              --stack-name ubatjelas-smart-prescription-medication-guide \
+              --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" \
+              --output text
+          }
+
+          MEDICATION_URL=$(get_output MedicationInstructionsFunctionUrl)
+          BUCKET_NAME=$(get_output BucketName)
+          WEBSITE_URL=$(get_output WebsiteUrl)
+
+          echo "medication_url=${MEDICATION_URL}"  >> "$GITHUB_OUTPUT"
+          echo "bucket_name=${BUCKET_NAME}"        >> "$GITHUB_OUTPUT"
+          echo "website_url=${WEBSITE_URL}"        >> "$GITHUB_OUTPUT"
+
+          echo "✅ Lambda URL  : ${MEDICATION_URL}"
+          echo "✅ S3 Bucket   : ${BUCKET_NAME}"
+          echo "✅ Website URL : ${WEBSITE_URL}"
+
+      # ── 8. Inject Lambda URL into index.html ─────────────────────────────────
+      - name: Inject Lambda URL into frontend
+        run: |
+          MEDICATION_URL="${{ steps.cf.outputs.medication_url }}"
+          sed -i "s|__MEDICATION_INSTRUCTIONS_URL__|${MEDICATION_URL}|g" frontend/index.html
+          echo "Injected: ${MEDICATION_URL}"
+
+      # ── 9. Sync frontend to S3 ────────────────────────────────────────────────
+      - name: Deploy frontend to S3
+        run: |
+          aws s3 sync frontend/ s3://${{ steps.cf.outputs.bucket_name }}/ \
+            --cache-control no-cache \
+            --delete
+
+      # ── 10. Invalidate CloudFront cache ───────────────────────────────────────
+      - name: Invalidate CloudFront cache
+        run: |
+          DIST_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?Comment=='UbatJelas Smart Prescription Medication Guide'].Id" \
+            --output text)
+          if [ -n "$DIST_ID" ]; then
+            aws cloudfront create-invalidation \
+              --distribution-id "$DIST_ID" \
+              --paths "/*"
+            echo "CloudFront invalidation created for distribution: $DIST_ID"
+          else
+            echo "CloudFront distribution ID not found — skipping invalidation"
+          fi
+
+      # ── 11. Summary ───────────────────────────────────────────────────────────
+      - name: Write job summary
+        run: |
+          echo "## 🚀 UbatJelas Deployment Complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Resource | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 🌐 Website URL | ${{ steps.cf.outputs.website_url }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| ⚡ Lambda URL | ${{ steps.cf.outputs.medication_url }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 🪣 S3 Bucket | ${{ steps.cf.outputs.bucket_name }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Visit your app at: **${{ steps.cf.outputs.website_url }}**" >> "$GITHUB_STEP_SUMMARY"
